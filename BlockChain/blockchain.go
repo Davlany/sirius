@@ -211,7 +211,7 @@ func ContinueBlockChain(address string) *BlockChain {
 
 }
 
-func (chain *BlockChain) FindUpsentTransactions(address string) []Transaction {
+func (chain *BlockChain) FindUnspentTransactions(address string) []Transaction {
 	var unspentTxs []Transaction
 
 	spentTXOs := make(map[string][]int)
@@ -245,8 +245,48 @@ func (chain *BlockChain) FindUpsentTransactions(address string) []Transaction {
 			break
 		}
 	}
-	return uspentTxs
+	return unspentTxs
 
+}
+
+func (chain *BlockChain) FindUTXO(address string) []TxOutput {
+	var UTXOs []TxOutput
+	unspentTransaction := chain.FindUnspentTransactions(address)
+
+	for _, tx := range unspentTransaction {
+		for _, out := range tx.Outputs {
+			if out.CanBeUnlocked(address) {
+				UTXOs = append(UTXOs, out)
+			}
+		}
+	}
+
+	return UTXOs
+
+}
+
+func (chain *BlockChain) FindSpendableOutputs(address string, amount int) (int, map[string][]int) {
+	unspentOuts := make(map[string][]int)
+	unspentTxs := chain.FindUnspentTransactions(address)
+	accumulated := 0
+
+Work:
+	for _, tx := range unspentTxs {
+		TxID := hex.EncodeToString(tx.ID)
+
+		for outIdx, out := range tx.Outputs {
+			if out.CanBeUnlocked(address) && accumulated < amount {
+				accumulated += out.Value
+				unspentOuts[TxID] = append(unspentOuts[TxID], outIdx)
+
+				if accumulated >= amount {
+					break Work
+				}
+			}
+		}
+	}
+
+	return accumulated, unspentOuts
 }
 
 func Handle(err error) {
